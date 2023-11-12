@@ -54,9 +54,9 @@ export class FishComponent implements OnInit, OnChanges {
 
   nodes = new Array<any>();
   links = new Array<any>();
-  width = 1280;
-  height = 600;
-
+  width = window.innerWidth;
+  height = window.innerHeight;
+  drag: any;
   constructor(private svc: FishService) {
     this.svc.restartRequest$.subscribe((req: boolean) => {
       if (req) {
@@ -73,7 +73,16 @@ export class FishComponent implements OnInit, OnChanges {
       .on('end', () => this.simulationDone())
       .on('tick', () => this.tick());
 
-    this.zoom = d3.zoom();
+    // this.zoom = d3.zoom();
+    // this.zoom.on('zoom', (event: any) => {
+    //   this.svg.attr('transform', event.transform);
+    // });
+    // this.zoom(this.svg);
+    this.drag = d3
+      .drag()
+      .on('start', this.dragstarted)
+      .on('drag', this.dragged)
+      .on('end', this.dragended);
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -86,7 +95,9 @@ export class FishComponent implements OnInit, OnChanges {
           .append('svg')
           .attr('width', this.width)
           .attr('height', this.height)
-          .call(this.defaultArrow);
+          .call(this.defaultArrow)
+          // .call(d3.drag());
+          .call(d3.zoom());
       }
       this.nodes = [];
       this.links = [];
@@ -411,6 +422,8 @@ export class FishComponent implements OnInit, OnChanges {
     if (this.force) {
       this.force.stop();
     }
+    this.node.on('click', this.drag);
+
     this.selected.emit(i.uuid);
   }
 
