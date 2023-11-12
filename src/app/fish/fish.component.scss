@@ -1,0 +1,71 @@
+.d3-container {
+    margin: 0 auto;
+}
+
+.downloadButton {
+    float: right;
+    margin-right: 10%;
+    background-color: #0078d4; /* Color azul de IBM */
+    color: white; /* Texto en blanco */
+    border: 2px solid #0078d4; /* Borde azul */
+    border-radius: 4px;
+    padding: 8px 16px; /* Más espacio alrededor del botón */
+    cursor: pointer;
+}
+
+::ng-deep .node {
+    cursor: grab;
+}
+
+
+
+::ng-deep text.label-0 {
+    font-size: 1.1em;
+}
+
+::ng-deep text.label-1 {
+    font-size: 1.0em;
+    fill: #111;
+    font-weight: bold;
+}
+
+::ng-deep text.label-2 {
+    font-size: 0.9em;
+    fill: #444;
+}
+
+::ng-deep text.label-3 {
+    font-size: .8em;
+    fill: #888;
+}
+
+::ng-deep text.label-4 {
+    font-size: .7em;
+    fill: #aaa;
+}
+
+::ng-deep .link-0 {
+    stroke: #000;
+    stroke-width: 2px;
+}
+
+::ng-deep .link-1 {
+    stroke: #333;
+    stroke-width: 1px;
+}
+
+::ng-deep .link-2 {
+    stroke: #666;
+    stroke-width: 1px;
+}
+
+::ng-deep .link-3 {
+    stroke: #666;
+    stroke-width: 1px;
+}
+
+::ng-deep .link-4 {
+    stroke: #666;
+    stroke-width: 1px;
+}
+
