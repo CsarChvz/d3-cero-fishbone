@@ -4,8 +4,6 @@ import {
   Input,
   SimpleChanges,
   OnChanges,
-  Output,
-  EventEmitter,
 } from '@angular/core';
 
 // D3
@@ -21,7 +19,6 @@ import { scaleLog } from 'd3-scale';
 import * as uuid from 'uuid';
 import * as d3SvgToPng from 'd3-svg-to-png';
 import { FishService } from './fish.service';
-
 type Link = {
   index?: number;
   depth?: number; // Might not be undefined
@@ -50,7 +47,6 @@ type Node = {
   name: string;
   parent?: Node;
 };
-
 @Component({
   selector: 'app-fish',
   templateUrl: './fish.component.html',
@@ -59,27 +55,10 @@ type Node = {
 export class FishComponent implements OnInit, OnChanges {
   @Input()
   data: any;
-
-  @Input()
-  showDowloadButton: boolean = false;
-
-  @Input()
-  btnClass = 'downloadButton';
-
-  @Input()
-  btnText = 'Download PNG';
-
-  @Output()
-  selected = new EventEmitter<string>();
-
-  svg: any;
-  force: any;
-  root: any;
-  node: any;
-  link: any;
-  nodeIdx = 0;
-  drag: any = d3.drag();
-  margin = 100;
+  wrapperStyle = {
+    width: '100%',
+    height: 500,
+  };
   linesConfig = [
     {
       color: '#000',
@@ -117,12 +96,26 @@ export class FishComponent implements OnInit, OnChanges {
       fontSizeEm: 0.8,
     },
   ];
+  svg: any;
+  force: any;
+  root: any;
+  node: any;
+  drag: any;
+  // linkScale
+  link: any;
+
+  margin = 100;
+
   nodes = new Array<any>();
   links = new Array<any>();
   width = '100%';
-  height = 820;
-  svgWidth = 0;
-  svgHeight = 0;
+  height = '100%';
+  svgWidth = () => {
+    return this.width;
+  };
+  svgHeight = () => {
+    return this.height;
+  };
   arrowElementId = '#arrow';
   constructor(private svc: FishService) {
     this.svc.restartRequest$.subscribe((req: boolean) => {
@@ -133,17 +126,29 @@ export class FishComponent implements OnInit, OnChanges {
   }
 
   ngOnInit(): void {
+    this.drag = d3.drag().on('drag', this.dragged).on('start', this.dragstart);
+
     this.force = forceSimulation(this.nodes)
       .force('charge', forceManyBody().strength(-10))
       .force('collision', forceCollide(15))
-      .on('tick', () => this.tick())
-      .force('link', forceLink(this.links).distance(this.linkDistance))
-      .on('end', () => this.simulationDone());
+      .force(
+        'link',
+        forceLink()
+          .id((d: any) => d.id)
+          .links(this.links)
+          .distance(
+            (d: any) => (d.target.maxChildIdx + 1) * this.linkDistance(d.depth)
+          )
+      )
+      // .force('link', forceLink(this.links).distance(this.linkDistance))
+      .on('end', () => this.simulationDone())
+      .on('tick', this.tick);
   }
 
   ngOnChanges(changes: SimpleChanges) {
     // check if "data" input has changed
     if (changes['data']) {
+      // Se inicializa el svg junto con sus puntas
       if (!this.svg) {
         /* TODO: A more angular way to do this is to use a ViewChild. */
         this.svg = d3
@@ -151,6 +156,7 @@ export class FishComponent implements OnInit, OnChanges {
           .append('svg')
           .attr('width', this.width)
           .attr('height', this.height)
+          .datum(this.data)
           .call(this.defaultArrow);
       }
       this.nodes = [];
@@ -158,9 +164,7 @@ export class FishComponent implements OnInit, OnChanges {
       if (changes['data'].currentValue === null) {
         this.clear();
       } else {
-        this.buildNodes(changes['data'].currentValue);
-        this.svgHeight = this.svg.node().getBoundingClientRect().height;
-        this.svgWidth = this.svg.node().getBoundingClientRect().width;
+        this.buildNodes(this.svg.datum());
         this.restart();
       }
     }
@@ -195,9 +199,12 @@ export class FishComponent implements OnInit, OnChanges {
     /* setup the nodes */
     this.node = this.svg
       .selectAll('.node')
-      .data(this.nodes, (d: any) => {
-        return d.uuid;
-      })
+      .data(this.nodes)
+      .enter()
+      .append('g')
+      .attr('class', (d: any) => `node ${d.root ? 'root' : ''}`)
+      .append('text')
+      .attr('class', (d: Node) => `label-${d.depth}`)
       .style('font-size', (d: Node) => {
         const size = this.getNodeConfigWithoutOverflow(d.depth).fontSizeEm;
         return `${size}em`;
@@ -214,50 +221,8 @@ export class FishComponent implements OnInit, OnChanges {
       .text((d: Node) => d.name)
       .classed('node', true)
       .classed('fixed', (d: any) => d.fx !== undefined)
-      .call(this.drag);
-
-    this.node
-      .enter()
-      .append('g')
-      .attr('class', (d: any) => {
-        return d.root ? 'node root' : 'node';
-      })
-      .on('click', (d: any, i: any) => {
-        this.nodeClicked(d, i);
-      })
-      .style('font-size', (d: Node) => {
-        const size = this.getNodeConfigWithoutOverflow(d.depth).fontSizeEm;
-        return `${size}em`;
-      })
-      .style('fill', (d: Node) => {
-        return this.getNodeConfigWithoutOverflow(d.depth).color;
-      })
-      .attr('text-anchor', (d: Node) =>
-        !d.depth ? 'start' : d.horizontal ? 'end' : 'middle'
-      )
-      .attr('dy', (d: any) =>
-        d.horizontal ? '.35em' : d.region === 1 ? '1em' : '-.2em'
-      )
-      .append('text');
-
-    /* find all text nodes and add the actual text to it. */
-    this.svg
-      .selectAll('text')
-      .attr('class', (d: any) => 'label-' + d.depth)
-      .attr('text-anchor', (d: any) => {
-        return !d.depth ? 'start' : d.horizontal ? 'end' : 'middle';
-      })
-      .attr('dy', (d: any) => {
-        return d.horizontal ? '.35em' : d.region === 1 ? '1em' : '-0.2em';
-      })
-      .text((d: any) => {
-        return d.name;
-      });
-
-    this.svg.selectAll('text').call(this.wrap, 100);
-
-    this.node.exit().remove();
-
+      .call(this.drag)
+      .on('click', this.click);
     /* setup the links */
     this.link = this.svg
       .selectAll('.link')
@@ -275,6 +240,22 @@ export class FishComponent implements OnInit, OnChanges {
         const width = this.getLineConfigWithoutOverflow(d.depth).strokeWidthPx;
         return `${width}px`;
       });
+    this.svg
+      .selectAll('text')
+      .attr('class', (d: any) => 'label-' + d.depth)
+      .attr('text-anchor', (d: any) => {
+        return !d.depth ? 'start' : d.horizontal ? 'end' : 'middle';
+      })
+      .attr('dy', (d: any) => {
+        return d.horizontal ? '.35em' : d.region === 1 ? '1em' : '-0.2em';
+      })
+      .text((d: any) => {
+        return d.name;
+      });
+
+    this.svg.selectAll('text').call(this.wrap, 100);
+
+    this.node.exit().remove();
 
     this.link.exit().remove();
 
@@ -287,17 +268,10 @@ export class FishComponent implements OnInit, OnChanges {
    *  vertical, region, depth, tail among others.
    * */
   buildNodes(node: any) {
-    /* don't add a node that already exists in the list of nodes. */
-    const idx = this.nodes.findIndex((val: any) => {
-      return val.uuid === node.uuid;
-    });
-    if (idx === -1) {
-      this.nodes.push(node);
-    }
-    var cx = 0;
-
+    this.nodes.push(node);
+    let cx = 0;
     let between = [node, node.connector];
-    let nodeLinks = [
+    const nodeLinks = [
       {
         source: node,
         target: node.connector,
@@ -305,19 +279,13 @@ export class FishComponent implements OnInit, OnChanges {
         depth: node.depth || 0,
       },
     ];
+
     let prev: any;
     let childLinkCount;
 
     if (!node.parent) {
-      /* don't add a tail, if one already exists in the list. */
-      const tailIdx = this.nodes.findIndex((val: any) => {
-        return val.tail;
-      });
-      if (tailIdx === -1) {
-        this.nodes.push((prev = { tail: true, uuid: uuid.v4() }));
-      } else {
-        prev = this.nodes[tailIdx];
-      }
+      // this.nodes.push((prev = {tail: true, uuid: uuid.v4()}));
+      this.nodes.push((prev = { tail: true, uuid: uuid.v4() }));
       between = [prev, node];
       nodeLinks[0].source = prev;
       nodeLinks[0].target = node;
@@ -353,9 +321,14 @@ export class FishComponent implements OnInit, OnChanges {
       } else {
         this.nodes.push(
           (prev = child.connector =
-            { between: between, childIdx: cx++, uuid: uuid.v4() })
+            {
+              between: between,
+              childIdx: cx++,
+              // uuid: uuid.v4(),
+            })
         );
       }
+
       nodeLinks.push({
         source: child,
         target: child.connector,
@@ -363,7 +336,6 @@ export class FishComponent implements OnInit, OnChanges {
         arrow: true,
       });
 
-      /* recurse capturing number of links created */
       childLinkCount = this.buildNodes(child);
       node.linkCount += childLinkCount;
       between[1].totalLinks.push(childLinkCount);
@@ -372,79 +344,58 @@ export class FishComponent implements OnInit, OnChanges {
     between[1].maxChildIdx = cx;
 
     Array.prototype.push.apply(this.links, nodeLinks);
+
     return node.linkCount;
   }
 
-  /**
-   * tick is the actual force layout method. Force is a simulation that happens in
-   * steps. At each step, a `tick` event is generated. We connect the event to this
-   * method. In this method, we compute the locations of each node based on the forces
-   * and position them accordingly.
-   * */
   tick() {
-    let k = this.force.alpha() * 0.8;
-    this.nodes.forEach((n: any) => this.calculateXY(n, k));
+    const alpha = this.force.alpha();
 
-    d3.selectAll('.node').attr('transform', function (d: any) {
-      return 'translate(' + d.x + ',' + d.y + ')';
+    const k = 6 * (alpha || 0);
+    const width: any = this.svgWidth();
+    const height: any = this.svgHeight();
+    const margin = this.margin;
+    let a;
+    let b;
+    const root = this.root;
+    this.nodes.forEach(function (d) {
+      if (d.root) {
+        d.x = width - (margin + root.getBBox().width);
+      }
+      if (d.tail) {
+        d.x = margin;
+        d.y = height / 2;
+      }
+
+      if (d.depth === 1) {
+        d.y = d.region === -1 ? margin : height - margin;
+        d.x -= 10 * k;
+      }
+
+      if (d.vertical) {
+        d.y += k * d.region;
+      }
+
+      if (d.depth) {
+        d.x -= k;
+      }
+
+      if (d.between) {
+        a = d.between[0];
+        b = d.between[1];
+
+        d.x = b.x - ((1 + d.childIdx) * (b.x - a.x)) / (b.maxChildIdx + 1);
+        d.y = b.y - ((1 + d.childIdx) * (b.y - a.y)) / (b.maxChildIdx + 1);
+      }
     });
 
-    d3.selectAll('.link')
-      .attr('x1', (d: any) => {
-        if (d.source) return d.source.x;
-      })
-      .attr('x2', (d: any) => {
-        if (d.target) return d.target.x;
-      })
-      .attr('y1', (d: any) => {
-        if (d.source) return d.source.y;
-      })
-      .attr('y2', (d: any) => {
-        if (d.target) return d.target.y;
-      });
-  }
+    this.node.attr('transform', (d: any) => `translate(${d.x},${d.y})`);
 
-  calculateXY(d: any, k: number) {
-    this.root = d3.select('.root').node();
-    if (!this.root) {
-      return;
-    }
-    /* handle the middle... could probably store the root width... */
-    if (d.root) {
-      d.x = this.svgWidth - (this.margin + this.root.getBBox().width);
-    }
-    if (d.tail) {
-      d.x = this.margin;
-      d.y = this.svgHeight / 2;
-    }
-
-    /* put the first-generation items at the top and bottom */
-    if (d.depth === 1) {
-      d.y = d.region === -1 ? this.margin : this.svgHeight - this.margin;
-      d.x -= 10 * k;
-    }
-
-    /* vertically-oriented tend towards the top and bottom of the page */
-    if (d.vertical) {
-      d.y += k * d.region;
-    }
-
-    /* everything tends to the left */
-    if (d.depth) {
-      d.x -= k;
-    }
-
-    /* position synthetic nodes at evently-spaced intervals...
-         TODO: do something based on the calculated size of each branch
-         since we don't have individual links anymore */
-    let a, b: any;
-    if (d.between) {
-      a = d.between[0];
-      b = d.between[1];
-
-      d.x = b.x - ((1 + d.childIdx) * (b.x - a.x)) / (b.maxChildIdx + 1);
-      d.y = b.y - ((1 + d.childIdx) * (b.y - a.y)) / (b.maxChildIdx + 1);
-    }
+    this.link
+      .attr('x1', (d: any) => d.source.x)
+      .attr('y1', (d: any) => d.source.y)
+      .attr('x2', (d: any) => d.target.x)
+      .attr('y2', (d: any) => d.target.y);
   }
 
   defaultArrow(svg: any) {
@@ -472,7 +423,7 @@ export class FishComponent implements OnInit, OnChanges {
   }
 
   linkDistance(l: any) {
-    const linkScale = scaleLog().domain([1, 5]).range([70, 10]);
+    const linkScale = scaleLog().domain([1, 5]).range([60, 40]);
     return (l.target.maxChildIdx + 1) * linkScale(l.depth + 1);
   }
 
@@ -480,7 +431,6 @@ export class FishComponent implements OnInit, OnChanges {
     if (this.force) {
       this.force.stop();
     }
-    this.selected.emit(i.uuid);
   }
 
   downloadImage() {
@@ -570,6 +520,22 @@ export class FishComponent implements OnInit, OnChanges {
 
   clamp(x: any, lo: any, hi: any) {
     return x < lo ? lo : x > hi ? hi : x;
+  }
+
+  click(event: any, d: any) {
+    delete d.fx;
+    delete d.fy;
+    d3.select(event.target).classed('fixed', false);
+    this.force?.alpha(1).restart();
+  }
+  dragstart = (event: any) => {
+    d3.select(event.sourceEvent.target).classed('fixed', true);
+  };
+
+  dragged(event: any, d: any) {
+    d.fx = this.clamp(event.x, 0, this.svgWidth());
+    d.fy = this.clamp(event.y, 0, this.svgHeight());
+    this.force?.alpha(1).restart();
   }
 }
 

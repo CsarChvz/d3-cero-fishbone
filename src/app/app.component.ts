@@ -8,5 +8,5 @@ import { testData, testData1, testData2, testData3 } from './fish/test.data';
 })
 export class AppComponent {
   title = 'd3-cero-fishbone';
-  data = testData;
+  data = testData1;
 }
