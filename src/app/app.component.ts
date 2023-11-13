@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { testData1 } from './fish/test.data';
+import { testData, testData1, testData2, testData3 } from './fish/test.data';
 
 @Component({
   selector: 'app-root',
@@ -8,5 +8,5 @@ import { testData1 } from './fish/test.data';
 })
 export class AppComponent {
   title = 'd3-cero-fishbone';
-  data = testData1;
+  data = testData;
 }

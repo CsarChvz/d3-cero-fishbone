@@ -320,3 +320,34 @@ export const testData = {
     },
   ],
 };
+
+export const testData3 = {
+  name: 'Flaws',
+  children: [
+    {
+      name: 'Machines',
+      children: [{ name: 'Speed' }, { name: 'Bits' }, { name: 'Sockets' }],
+    },
+    {
+      name: 'Personel',
+      children: [
+        { name: 'Shifts' },
+        { name: 'Training' },
+        { name: 'Operators' },
+      ],
+    },
+    {
+      name: 'Methods',
+      children: [{ name: 'Brake' }, { name: 'Angle' }],
+    },
+    {
+      name: 'Material',
+      children: [
+        {
+          name: 'Quality',
+          children: [{ name: 'Delivery' }],
+        },
+      ],
+    },
+  ],
+};

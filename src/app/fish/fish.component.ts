@@ -22,6 +22,35 @@ import * as uuid from 'uuid';
 import * as d3SvgToPng from 'd3-svg-to-png';
 import { FishService } from './fish.service';
 
+type Link = {
+  index?: number;
+  depth?: number; // Might not be undefined
+  arrow?: boolean;
+  source?: unknown;
+  target?: unknown;
+};
+type Connector = {
+  between: (Node | Connector)[];
+  childIdx?: number;
+  index?: number;
+  maxChildIdx?: number;
+  totalLinks: Link[];
+  vx: number;
+  vy: number;
+  x: number;
+  y: number;
+};
+
+type Node = {
+  index?: number;
+  childIdx?: number;
+  depth?: number;
+  horizontal?: boolean;
+  linkCount?: number;
+  name: string;
+  parent?: Node;
+};
+
 @Component({
   selector: 'app-fish',
   templateUrl: './fish.component.html',
@@ -51,12 +80,49 @@ export class FishComponent implements OnInit, OnChanges {
   nodeIdx = 0;
 
   margin = 100;
+  linesConfig = [
+    {
+      color: '#000',
+      strokeWidthPx: 2,
+    },
+    {
+      color: '#333',
+      strokeWidthPx: 1,
+    },
+    {
+      color: '#666',
+      strokeWidthPx: 0.5,
+    },
+  ];
 
+  nodesConfig = [
+    {
+      color: '#000',
+      fontSizeEm: 2,
+    },
+    {
+      color: '#111',
+      fontSizeEm: 1.5,
+    },
+    {
+      color: '#444',
+      fontSizeEm: 1,
+    },
+    {
+      color: '#888',
+      fontSizeEm: 0.9,
+    },
+    {
+      color: '#aaa',
+      fontSizeEm: 0.8,
+    },
+  ];
   nodes = new Array<any>();
   links = new Array<any>();
-  width = 1280;
-  height = 600;
-
+  width = '100%';
+  height = 820;
+  svgWidth = 0;
+  svgHeight = 0;
   constructor(private svc: FishService) {
     this.svc.restartRequest$.subscribe((req: boolean) => {
       if (req) {
@@ -92,6 +158,8 @@ export class FishComponent implements OnInit, OnChanges {
         this.clear();
       } else {
         this.buildNodes(changes['data'].currentValue);
+        this.svgHeight = this.svg.node().getBoundingClientRect().height;
+        this.svgWidth = this.svg.node().getBoundingClientRect().width;
         this.restart();
       }
     }
@@ -263,21 +331,7 @@ export class FishComponent implements OnInit, OnChanges {
 
     between[1].maxChildIdx = cx;
 
-    nodeLinks.forEach((link: any) => {
-      let lidx = this.links.findIndex((val) => {
-        return (
-          val.source.uuid === link.source.uuid &&
-          val.target.uuid === link.target.uuid
-        );
-      });
-      if (lidx === -1) {
-        this.links.push(link);
-      }
-    });
-    //this.links.unshift(...nodeLinks);
-
-    /* the number of links created byt this node and its children...
-       TODO: use `linkCount` and/instead of `childIdx` for spacing */
+    Array.prototype.push.apply(this.links, nodeLinks);
     return node.linkCount;
   }
 
@@ -317,16 +371,16 @@ export class FishComponent implements OnInit, OnChanges {
     }
     /* handle the middle... could probably store the root width... */
     if (d.root) {
-      d.x = this.width - (this.margin + this.root.getBBox().width);
+      d.x = this.svgWidth - (this.margin + this.root.getBBox().width);
     }
     if (d.tail) {
       d.x = this.margin;
-      d.y = this.height / 2;
+      d.y = this.svgHeight / 2;
     }
 
     /* put the first-generation items at the top and bottom */
     if (d.depth === 1) {
-      d.y = d.region === -1 ? this.margin : this.height - this.margin;
+      d.y = d.region === -1 ? this.margin : this.svgHeight - this.margin;
       d.x -= 10 * k;
     }
 
@@ -450,6 +504,32 @@ export class FishComponent implements OnInit, OnChanges {
         }
       }
     });
+  }
+
+  // lineConfigWithoutOverflow
+  getLineConfigWithoutOverflow(index: number | undefined) {
+    if (!index || index < 0) return this.linesConfig[0];
+
+    const maxIndex = this.linesConfig.length - 1;
+
+    return this.linesConfig[
+      maxIndex ^ ((index ^ maxIndex) & -(index < maxIndex))
+    ];
+  }
+
+  // nodeConfigWithoutOverflow
+  getNodeConfigWithoutOverflow(index: number | undefined) {
+    if (!index || index < 0) return this.nodesConfig[0];
+
+    const maxIndex = this.nodesConfig.length - 1;
+
+    return this.nodesConfig[
+      maxIndex ^ ((index ^ maxIndex) & -(index < maxIndex))
+    ];
+  }
+
+  clamp(x: any, lo: any, hi: any) {
+    return x < lo ? lo : x > hi ? hi : x;
   }
 }
 

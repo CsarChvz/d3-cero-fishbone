@@ -11,11 +11,15 @@
     cursor: pointer;
 }
 
-::ng-deep .node {
-    cursor: grab;
+// ::ng-deep .node {
+//     cursor: grab;
+// }
+.d3-container {
+    justify-content: center;
+    align-items: center;
+    display: flex;
+    margin: auto;
 }
-
-
 
 ::ng-deep text.label-0 {
     font-size: 1.1em;
