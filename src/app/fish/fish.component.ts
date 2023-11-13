@@ -50,7 +50,6 @@ type Node = {
   name: string;
   parent?: Node;
 };
-
 @Component({
   selector: 'app-fish',
   templateUrl: './fish.component.html',
@@ -78,8 +77,15 @@ export class FishComponent implements OnInit, OnChanges {
   node: any;
   link: any;
   nodeIdx = 0;
-  drag: any = d3.drag();
+
   margin = 100;
+
+  nodes = new Array<any>();
+  links = new Array<any>();
+  width = '100%';
+  height = 820;
+  svgWidth = 0;
+  svgHeight = 0;
   linesConfig = [
     {
       color: '#000',
@@ -117,13 +123,6 @@ export class FishComponent implements OnInit, OnChanges {
       fontSizeEm: 0.8,
     },
   ];
-  nodes = new Array<any>();
-  links = new Array<any>();
-  width = '100%';
-  height = 820;
-  svgWidth = 0;
-  svgHeight = 0;
-  arrowElementId = '#arrow';
   constructor(private svc: FishService) {
     this.svc.restartRequest$.subscribe((req: boolean) => {
       if (req) {
@@ -136,9 +135,9 @@ export class FishComponent implements OnInit, OnChanges {
     this.force = forceSimulation(this.nodes)
       .force('charge', forceManyBody().strength(-10))
       .force('collision', forceCollide(15))
-      .on('tick', () => this.tick())
       .force('link', forceLink(this.links).distance(this.linkDistance))
-      .on('end', () => this.simulationDone());
+      .on('end', () => this.simulationDone())
+      .on('tick', () => this.tick());
   }
 
   ngOnChanges(changes: SimpleChanges) {
@@ -193,10 +192,15 @@ export class FishComponent implements OnInit, OnChanges {
 
   setupNodes() {
     /* setup the nodes */
-    this.node = this.svg
-      .selectAll('.node')
-      .data(this.nodes, (d: any) => {
-        return d.uuid;
+    this.node = this.svg.selectAll('.node').data(this.nodes, (d: any) => {
+      return d.uuid;
+    });
+
+    this.node
+      .enter()
+      .append('g')
+      .attr('class', (d: any) => {
+        return d.root ? 'node root' : 'node';
       })
       .style('font-size', (d: Node) => {
         const size = this.getNodeConfigWithoutOverflow(d.depth).fontSizeEm;
@@ -214,60 +218,37 @@ export class FishComponent implements OnInit, OnChanges {
       .text((d: Node) => d.name)
       .classed('node', true)
       .classed('fixed', (d: any) => d.fx !== undefined)
-      .call(this.drag);
-
-    this.node
-      .enter()
-      .append('g')
-      .attr('class', (d: any) => {
-        return d.root ? 'node root' : 'node';
-      })
-      .on('click', (d: any, i: any) => {
-        this.nodeClicked(d, i);
-      })
-      .style('font-size', (d: Node) => {
-        const size = this.getNodeConfigWithoutOverflow(d.depth).fontSizeEm;
-        return `${size}em`;
-      })
-      .style('fill', (d: Node) => {
-        return this.getNodeConfigWithoutOverflow(d.depth).color;
-      })
-      .attr('text-anchor', (d: Node) =>
-        !d.depth ? 'start' : d.horizontal ? 'end' : 'middle'
-      )
-      .attr('dy', (d: any) =>
-        d.horizontal ? '.35em' : d.region === 1 ? '1em' : '-.2em'
-      )
       .append('text');
 
     /* find all text nodes and add the actual text to it. */
-    this.svg
-      .selectAll('text')
-      .attr('class', (d: any) => 'label-' + d.depth)
-      .attr('text-anchor', (d: any) => {
-        return !d.depth ? 'start' : d.horizontal ? 'end' : 'middle';
-      })
-      .attr('dy', (d: any) => {
-        return d.horizontal ? '.35em' : d.region === 1 ? '1em' : '-0.2em';
-      })
-      .text((d: any) => {
-        return d.name;
-      });
+    // this.svg
+    //   .selectAll('text')
+    //   .attr('class', (d: any) => 'label-' + d.depth)
+    //   .attr('text-anchor', (d: any) => {
+    //     return !d.depth ? 'start' : d.horizontal ? 'end' : 'middle';
+    //   })
+    //   .attr('dy', (d: any) => {
+    //     return d.horizontal ? '.35em' : d.region === 1 ? '1em' : '-0.2em';
+    //   })
+    //   .text((d: any) => {
+    //     return d.name;
+    //   });
 
     this.svg.selectAll('text').call(this.wrap, 100);
 
     this.node.exit().remove();
 
     /* setup the links */
-    this.link = this.svg
-      .selectAll('.link')
-      .data(this.links)
+    this.link = this.svg.selectAll('.link').data(this.links);
+    this.link
       .enter()
       .append('line')
-      .attr('class', (d: any) => `link link-${d.depth}`)
-      .attr('marker-end', (d: any) =>
-        d.arrow ? `url(${this.arrowElementId})` : null
-      )
+      .attr('class', (d: any) => {
+        return 'link link-' + d.depth;
+      })
+      .attr('marker-end', (d: any) => {
+        return d.arrow ? 'url(#arrow)' : null;
+      })
       .style('stroke', (d: Link) => {
         return this.getLineConfigWithoutOverflow(d.depth).color;
       })
@@ -372,6 +353,22 @@ export class FishComponent implements OnInit, OnChanges {
     between[1].maxChildIdx = cx;
 
     Array.prototype.push.apply(this.links, nodeLinks);
+
+    // nodeLinks.forEach((link: any) => {
+    //   let lidx = this.links.findIndex((val) => {
+    //     return (
+    //       val.source.uuid === link.source.uuid &&
+    //       val.target.uuid === link.target.uuid
+    //     );
+    //   });
+    //   if (lidx === -1) {
+    //     this.links.push(link);
+    //   }
+    // });
+    //this.links.unshift(...nodeLinks);
+
+    /* the number of links created byt this node and its children...
+       TODO: use `linkCount` and/instead of `childIdx` for spacing */
     return node.linkCount;
   }
 
@@ -382,7 +379,7 @@ export class FishComponent implements OnInit, OnChanges {
    * and position them accordingly.
    * */
   tick() {
-    let k = this.force.alpha() * 0.8;
+    let k = this.force.alpha() * 0.6;
     this.nodes.forEach((n: any) => this.calculateXY(n, k));
 
     d3.selectAll('.node').attr('transform', function (d: any) {
@@ -449,7 +446,7 @@ export class FishComponent implements OnInit, OnChanges {
 
   defaultArrow(svg: any) {
     /* creates an svg:defs and marker with an arrow if needed...
-         really just an example, as they aren't very flexible */
+       really just an example, as they aren't very flexible */
     var defs = svg.selectAll('defs').data([1]);
 
     defs.enter().append('defs');
@@ -472,7 +469,7 @@ export class FishComponent implements OnInit, OnChanges {
   }
 
   linkDistance(l: any) {
-    const linkScale = scaleLog().domain([1, 5]).range([70, 10]);
+    const linkScale = scaleLog().domain([1, 5]).range([60, 30]);
     return (l.target.maxChildIdx + 1) * linkScale(l.depth + 1);
   }
 
@@ -545,7 +542,6 @@ export class FishComponent implements OnInit, OnChanges {
       }
     });
   }
-
   // lineConfigWithoutOverflow
   getLineConfigWithoutOverflow(index: number | undefined) {
     if (!index || index < 0) return this.linesConfig[0];
@@ -566,10 +562,6 @@ export class FishComponent implements OnInit, OnChanges {
     return this.nodesConfig[
       maxIndex ^ ((index ^ maxIndex) & -(index < maxIndex))
     ];
-  }
-
-  clamp(x: any, lo: any, hi: any) {
-    return x < lo ? lo : x > hi ? hi : x;
   }
 }
 
